@@ -49,8 +49,8 @@ module Gattica
         # get profiles
         response = do_http_get("/analytics/v2.4/management/accounts/~all/webproperties/~all/profiles?max-results=10000")
         xml = Hpricot(response)
-        @user_accounts = xml.search(:entry).collect { |profile_xml| 
-          Account.new(profile_xml) 
+        @user_accounts = xml.search(:entry).collect { |profile_xml|
+          Account.new(profile_xml)
         }
 
         # Fill in the goals
@@ -90,8 +90,8 @@ module Gattica
         create_http_connection('www.googleapis.com')
         response = do_http_get("/analytics/v2.4/management/segments?max-results=10000")
         xml = Hpricot(response)
-        @user_segments = xml.search("dxp:segment").collect { |s| 
-          Segment.new(s) 
+        @user_segments = xml.search("dxp:segment").collect { |s|
+          Segment.new(s)
         }
       end
       return @user_segments
@@ -214,18 +214,29 @@ module Gattica
 
       # TODO: update so that in regular expression filters (=~ and !~), any initial special characters in the regular expression aren't also picked up as part of the operator (doesn't cause a problem, but just feels dirty)
       unless args[:filters].empty?    # filters are a little more complicated because they can have all kinds of modifiers
+        glue = ';'
         output += '&filters=' + args[:filters].collect do |filter|
-          match, name, operator, expression = *filter.match(/^(\w*)\s*([=!<>~@]*)\s*(.*)$/)           # splat the resulting Match object to pull out the parts automatically
-          unless name.empty? || operator.empty? || expression.empty?                      # make sure they all contain something
-            "ga:#{name}#{CGI::escape(operator.gsub(/ /,''))}#{CGI::escape(expression)}"   # remove any whitespace from the operator before output
+          if filter.is_a? Array
+            glue = ';'
+            filter.collect do |filter2|
+              build_filter(filter2)
+            end.join(';')
           else
-            raise GatticaError::InvalidFilter, "The filter '#{filter}' is invalid. Filters should look like 'browser == Firefox' or 'browser==Firefox'"
+            build_filter(filter)
           end
-        end.join(';')
+        end.join(glue)
       end
       return output
     end
 
+    def build_filter(filter)
+      match, name, operator, expression = *filter.match(/^(\w*)\s*([=!<>~@]*)\s*(.*)$/)           # splat the resulting Match object to pull out the parts automatically
+      unless name.empty? || operator.empty? || expression.empty?                      # make sure they all contain something
+        "ga:#{name}#{CGI::escape(operator.gsub(/ /,''))}#{CGI::escape(expression)}"   # remove any whitespace from the operator before output
+      else
+        raise GatticaError::InvalidFilter, "The filter '#{filter}' is invalid. Filters should look like 'browser == Firefox' or 'browser==Firefox'"
+      end
+    end
 
     # Validates that the args passed to +get+ are valid
     def validate_and_clean(args)
@@ -249,7 +260,7 @@ module Gattica
 
       # make sure that the user is only trying to filter fields that are in dimensions or metrics
       if args[:filters]
-        missing = args[:filters].find_all do |arg|
+        missing = args[:filters].flatten.find_all do |arg|
           !possible.include? arg.match(/^\w*/).to_s    # get the name of the filter and compare
         end
         unless missing.empty?
