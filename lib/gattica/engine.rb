@@ -217,10 +217,10 @@ module Gattica
         glue = ';'
         output += '&filters=' + args[:filters].collect do |filter|
           if filter.is_a? Array
-            glue = ','
+            glue = ';'
             filter.collect do |filter2|
               build_filter(filter2)
-            end.join(';')
+            end.join(',')
           else
             build_filter(filter)
           end
